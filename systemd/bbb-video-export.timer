@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the BBB video export batch nightly
+
+[Timer]
+# Requires systemd 246+ for the trailing timezone in OnCalendar. Adjust the
+# timezone (and WINDOW_START_HOUR/WINDOW_END_HOUR in the env file) to match
+# your own overnight window.
+OnCalendar=*-*-* 23:00:00 Asia/Tehran
+Persistent=true
+
+[Install]
+WantedBy=timers.target

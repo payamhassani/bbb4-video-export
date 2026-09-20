@@ -1,0 +1,10 @@
+[Unit]
+Description=BBB nightly recording-to-video export batch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/bbb-video-export/env
+ExecStart=/usr/bin/python3 /usr/local/bin/bbb-nightly-batch.py
+User=ubuntu

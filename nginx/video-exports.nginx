@@ -1,0 +1,7 @@
+# Drop this file in /etc/bigbluebutton/nginx/ (BBB's own nginx config
+# already includes /etc/bigbluebutton/nginx/*.nginx, so this survives
+# bbb-conf/package updates without touching BBB's own nginx site file).
+location /video-exports/ {
+    alias /var/bigbluebutton/video-exports/;
+    add_header Content-Disposition 'attachment';
+}
