@@ -33,6 +33,19 @@ trap cleanup EXIT
 
 echo "[$(date -Is)] Exporting $RECORD_ID (duration=${DURATION}s) -> $OUTPUT_PATH" >> "$LOG_FILE"
 
+# Run from an unattended systemd service (no login session), so none of
+# XDG_RUNTIME_DIR / a D-Bus session / a running PulseAudio daemon can be
+# assumed to exist the way they would in an interactive shell — every one
+# of those has to be set up explicitly, or pactl/ffmpeg's pulse capture
+# and Chrome's own D-Bus calls fail with a bare "Connection refused".
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+mkdir -p "$XDG_RUNTIME_DIR"
+
+if ! pactl info >> "$LOG_FILE" 2>&1; then
+    pulseaudio -D --exit-idle-time=-1 >> "$LOG_FILE" 2>&1
+    sleep 2
+fi
+
 export DISPLAY="$DISPLAY_NUM"
 Xvfb "$DISPLAY_NUM" -screen 0 1280x720x24 >> "$LOG_FILE" 2>&1 &
 XVFB_PID=$!
