@@ -23,11 +23,27 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/${RECORD_ID}.log"
 
 cleanup() {
+    # Preserve whatever exit status got us here (success or failure) - without
+    # this, a hiccup in the cleanup itself (see below) would silently turn a
+    # successful export into a reported failure.
+    local status=$?
     [ -n "${CHROME_PID:-}" ] && kill "$CHROME_PID" 2>/dev/null || true
+    # Killing the main Chrome process only sends it SIGTERM; its renderer/GPU/
+    # zygote children can still be exiting and holding files open under
+    # PROFILE_DIR for a moment after that. Wait for it, then make sure
+    # anything left pinned to this profile dir is gone before removing it -
+    # otherwise `rm -rf` can transiently race a child process and fail with
+    # "Directory not empty".
+    [ -n "${CHROME_PID:-}" ] && wait "$CHROME_PID" 2>/dev/null
+    pkill -9 -f "$PROFILE_DIR" 2>/dev/null || true
     [ -n "${XVFB_PID:-}" ] && kill "$XVFB_PID" 2>/dev/null || true
     MODULE_ID="$(pactl list short modules 2>/dev/null | awk -v s="$SINK_NAME" '$0 ~ s {print $1}')"
     [ -n "$MODULE_ID" ] && pactl unload-module "$MODULE_ID" 2>/dev/null || true
-    rm -rf "$PROFILE_DIR"
+    for _ in 1 2 3; do
+        rm -rf "$PROFILE_DIR" 2>/dev/null && break
+        sleep 1
+    done
+    exit "$status"
 }
 trap cleanup EXIT
 
