@@ -75,15 +75,22 @@ the day's backlog sequentially inside a configurable overnight window
 run — if it's still working when the window closes, so it never bleeds
 into the next morning's classes.
 
+## Getting the duration right
+
+`bbb-nightly-batch.py` reads the capture duration from the recording's own
+`metadata.xml` (`<playback><duration>`, in milliseconds) rather than the
+`getRecordings` API's `startTime`/`endTime` span. Those two are **not**
+the same thing: a moderator who presses Stop but leaves the room open for
+a few more minutes before it actually closes gets that idle time baked
+into `endTime - startTime`, producing a correct-but-much-too-long export
+with a long static tail. `metadata.xml` already reflects the true
+recorded/rendered length, which is what you actually want.
+
 ## Known limitations
 
 - If BBB ever changes the presentation player's DOM (e.g. moves the play
   button), the one hardcoded click coordinate in `bbb-export-video.sh`
   will need updating.
-- The captured video runs for the recording's full metadata duration even
-  if the actual content (slide changes, audio) finishes earlier — the tail
-  is a static freeze-frame of the last state, which is a correct, fully
-  playable video, just not the smallest possible file.
 - One export at a time by design (see above) — don't run multiple
   instances of `bbb-export-video.sh` concurrently against the same virtual
   display/audio sink.

@@ -37,11 +37,34 @@ WINDOW_START_HOUR = int(os.environ.get("WINDOW_START_HOUR", "23"))
 WINDOW_END_HOUR = int(os.environ.get("WINDOW_END_HOUR", "7"))
 LOG_PATH = os.environ.get("LOG_PATH", "/var/log/bbb-video-export/nightly-batch.log")
 
-# a static "the recording finished, nothing more happens" tail is harmless
-# (still a correct, fully playable video) — this padding just makes sure a
-# slightly-off duration never cuts off real content near the end.
-DURATION_PAD_SECONDS = 10
+# BBB's own publish directory, present locally since this script runs ON
+# the BBB server itself. metadata.xml's <playback><duration> is the ACTUAL
+# rendered playback length in milliseconds, already excluding any gap
+# between the moderator pressing Stop and the meeting actually closing.
+# getRecordings' own startTime/endTime span the whole "recording was armed"
+# window instead - a moderator who stops recording but leaves the room open
+# for a few more minutes gets that idle time baked into (endTime - startTime),
+# producing a correct-but-too-long export with a long static tail. Only
+# fall back to that coarser span if metadata.xml is ever missing/unparseable.
+PUBLISHED_DIR = os.environ.get("PUBLISHED_DIR", "/var/bigbluebutton/published/presentation")
+
+# a few seconds of static "the recording finished" tail is harmless (still a
+# correct, fully playable video) — this padding just covers encoder/player
+# startup jitter, not a real content gap anymore now duration comes from
+# metadata.xml.
+DURATION_PAD_SECONDS = 5
 MIN_DURATION_SECONDS = 10
+
+
+def precise_duration_seconds(record_id: str, fallback_start_ms: int, fallback_end_ms: int) -> int:
+    metadata_path = os.path.join(PUBLISHED_DIR, record_id, "metadata.xml")
+    try:
+        duration_ms = int(ET.parse(metadata_path).getroot().findtext("./playback/duration"))
+    except Exception as exc:
+        log(f"Could not read {metadata_path} ({exc}) - falling back to the getRecordings time span.")
+        duration_ms = fallback_end_ms - fallback_start_ms
+
+    return max(MIN_DURATION_SECONDS, round(duration_ms / 1000) + DURATION_PAD_SECONDS)
 
 
 def log(message: str) -> None:
@@ -93,7 +116,7 @@ def pending_recordings():
 
         start_ms = int(recording.findtext("startTime") or 0)
         end_ms = int(recording.findtext("endTime") or 0)
-        duration_seconds = max(MIN_DURATION_SECONDS, round((end_ms - start_ms) / 1000) + DURATION_PAD_SECONDS)
+        duration_seconds = precise_duration_seconds(record_id, start_ms, end_ms)
 
         yield record_id, playback_url, duration_seconds, output_path
 
